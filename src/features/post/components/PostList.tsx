@@ -1,18 +1,16 @@
+// src/features/post/components/PostList.tsx
 "use client";
-import { usePosts } from "../hooks/usePosts";
 
-export function PostList() {
-  const { data, isLoading, error } = usePosts();
+import { useGetPostsQuery } from "../services/postApi";
 
-  if (isLoading) return <p>Loading posts...</p>;
-  if (error) return <p>Error loading posts</p>;
+export default function PostList() {
+  const { data, isLoading } = useGetPostsQuery();
 
+  if (isLoading) return <p>Loading...</p>;
   return (
     <ul>
-      {data.map((post: any) => (
-        <li key={post.id} className="border-b py-2">
-          {post.title}
-        </li>
+      {data?.map((post) => (
+        <li key={post.id}>{post.title}</li>
       ))}
     </ul>
   );
