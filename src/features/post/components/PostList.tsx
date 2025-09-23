@@ -1,17 +1,23 @@
 "use client";
+
+import React, { useEffect } from "react";
 import { usePosts } from "../hooks/usePosts";
 
-export function PostList() {
-  const { data, isLoading, error } = usePosts();
+export default function PostList() {
+  const { posts, loading, error, fetch } = usePosts();
 
-  if (isLoading) return <p>Loading posts...</p>;
-  if (error) return <p>Error loading posts</p>;
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
 
+  if (loading) return <p>Loading posts...</p>;
+  if (error) return <p className="text-red-600">Error: {error}</p>;
   return (
-    <ul>
-      {data.map((post: any) => (
-        <li key={post.id} className="border-b py-2">
-          {post.title}
+    <ul className="space-y-2">
+      {posts.map((p: any) => (
+        <li key={p.id} className="border p-2 rounded">
+          <h3 className="font-semibold">{p.title}</h3>
+          <p className="text-sm">{p.body}</p>
         </li>
       ))}
     </ul>

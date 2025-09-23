@@ -1,41 +1,36 @@
 "use client";
-import { useState } from "react";
-import { useLogin } from "../hooks/useLogin";
 
-export function LoginForm() {
-  const login = useLogin();
+import React, { useState } from "react";
+
+import { loginRequest } from "../store/authSlice";
+import { useAppDispatch } from "@/store/hook";
+
+export default function LoginForm() {
+  const dispatch = useAppDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    login.mutate({ email, password });
-  }
+    dispatch(loginRequest({ email, password }));
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 w-64">
+    <form onSubmit={submit} className="max-w-sm mx-auto p-4 space-y-2">
       <input
-        type="email"
-        placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="border p-2 rounded"
+        placeholder="email"
+        className="border px-3 py-2 w-full rounded"
       />
       <input
-        type="password"
-        placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="border p-2 rounded"
+        placeholder="password"
+        type="password"
+        className="border px-3 py-2 w-full rounded"
       />
-      <button
-        type="submit"
-        disabled={login.isPending}
-        className="bg-blue-500 text-white p-2 rounded"
-      >
-        {login.isPending ? "Logging in..." : "Login"}
-      </button>
-      {login.isError && <p className="text-red-500">Error logging in</p>}
+      <button className="bg-blue-600 text-white px-4 py-2 rounded">Login</button>
     </form>
   );
 }
