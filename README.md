@@ -15,8 +15,10 @@ Open http://localhost:3000 to view the app.
 
 - **Next.js App Router**: Routing, layouts, streaming, and server components
 - **TypeScript**: Static typing
+- **Redux Toolkit**: App state with feature slices in `src/features/*/store`
+- **redux-saga**: Side effects and async flows
 - **Axios**: HTTP client via `src/lib/axiosClient.ts`
-- **React Query (TanStack Query)**: Data fetching/caching via `src/lib/queryClient.ts`
+- **next-themes**: Theme switching via `ThemeProvider`
 - **PostCSS**: See `postcss.config.mjs`
 
 ## Folder Structure and Responsibilities
@@ -99,7 +101,7 @@ Open http://localhost:3000 to view the app.
 
 - `layout.tsx`: Root layout applied to all routes (global HTML skeleton, fonts, and providers).
 - `globals.css`: Global CSS.
-- `providers.tsx`: Central place to mount context providers (e.g., React Query `QueryClientProvider`).
+- `providers.tsx`: Central place to mount context providers (Redux `Provider`, `ThemeProvider`).
 - `page.tsx`: Home page route (`/`).
 - `dashboard/`: Nested route for `/dashboard`.
   - `layout.tsx`: Dashboard-specific layout (wraps all nested pages).
@@ -116,31 +118,33 @@ Local UI primitives scoped to the app (e.g., `button.tsx`). Prefer `src/shared/c
 Each feature directory encapsulates all domain logic and UI, following a predictable structure:
 
 - `components/`: Feature-specific components composed with shared UI primitives.
-- `hooks/`: React hooks for the feature (e.g., mutation/query hooks, local logic).
+- `hooks/`: React hooks for the feature (view logic; dispatch/select helpers).
 - `services/`: Low-level API clients for the feature (e.g., axios calls).
-- `store/`: Local state management for the feature (e.g., Zustand, signals, or context).
+- `store/`: Redux slices, sagas, and actions for the feature.
 - `types.ts`: TypeScript types/models for the feature domain.
 
 #### `auth` feature
 
 - `components/LoginForm.tsx`: Authentication form UI.
-- `hooks/useLogin.ts`: Encapsulates login logic (e.g., form handling, mutation via `authService`).
+- `hooks/useLogin.ts`: Encapsulates login logic; dispatches actions handled by sagas.
 - `services/authService.ts`: Auth API calls using `axiosClient`.
-- `store/authStore.ts`: Client-side auth/session state.
+- `store/authSlice.ts`: Client-side auth/session state (e.g., `setCredentials`, `logout`).
+- `store/authSaga.ts`: Handles side effects (e.g., login, refresh, logout flows).
 - `types.ts`: Auth-related types (e.g., `User`, `LoginPayload`).
 
 #### `post` feature
 
 - `components/PostList.tsx` / `PostItem.tsx`: Post UI components.
-- `hooks/usePosts.ts`: Data fetching/caching hooks, typically backed by React Query.
+- `hooks/usePosts.ts`: Data fetching hook that dispatches `fetchPostsRequest` and selects state.
 - `services/postService.ts`: Post API calls using `axiosClient`.
-- `store/postStore.ts`: UI or client cache state not handled by React Query.
+- `store/postSlice.ts`: UI state such as `selectedPostId`, posts list, loading, error.
+- `store/postSaga.ts`: Handles `fetchPostsRequest` by calling the service and dispatching success/failure.
 - `types.ts`: Post-related types (e.g., `Post`, `CreatePostPayload`).
 
 ### `src/lib`
 
-- `axiosClient.ts`: Pre-configured Axios instance (base URL, interceptors, headers).
-- `queryClient.ts`: React Query `QueryClient` instance and config (retry, stale times, etc.).
+- `axiosClient.ts`: Pre-configured Axios instance (base URL, interceptors, headers, refresh token logic).
+- `queryClient.ts`: (Optional) TanStack Query setup if you choose to use it elsewhere.
 - `utils.ts`: Cross-cutting helpers not tied to a specific feature.
 
 ### `src/shared`
@@ -154,26 +158,56 @@ Reusable, feature-agnostic building blocks:
 
 ## Data Flow and Responsibilities
 
-- **Services**: Call HTTP endpoints using `axiosClient`. They return typed data and throw errors.
-- **Hooks**: Orchestrate data fetching/caching (React Query) or mutations; compose services; expose a React-friendly API.
-- **Store**: Holds client UI state not well-modeled by server cache (e.g., filters, modals, ephemeral UI flags).
-- **Components**: Dumb-ish UI that renders props/state from hooks and stores.
+- **Slices (store)**: Define state and reducers for each feature.
+- **Sagas**: Watch dispatched actions, call `services/*`, and dispatch success/failure actions.
+- **Services**: Call HTTP endpoints using `axiosClient`. They return typed data or throw errors.
+- **Hooks**: Compose dispatch/select logic for components.
+- **Components**: Render state from slices via selectors and trigger actions.
+
+### Global Store and Providers
+
+- `src/store/index.ts`: Configures Redux store, attaches feature reducers, and wires `redux-saga` middleware. Exposes `RootState` and `AppDispatch` types.
+- `src/store/rootSaga.ts`: Root saga that forks feature sagas.
+- `src/app/providers.tsx`: Wraps the app with Redux `Provider` and `ThemeProvider`.
+
+Quick usage:
+
+```tsx
+// Select and dispatch
+import { useAppDispatch, useAppSelector } from "@/store/hook";
+import { fetchPostsRequest } from "@/features/post/store/postSlice";
+
+export function PostListContainer() {
+  const dispatch = useAppDispatch();
+  const { items, loading, error } = useAppSelector((s) => s.post);
+  React.useEffect(() => { dispatch(fetchPostsRequest()); }, [dispatch]);
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Failed: {error}</div>;
+  return <pre>{JSON.stringify(items, null, 2)}</pre>;
+}
+```
 
 ## Conventions
 
 - **Feature-first**: Add new domains under `src/features/<domain>`.
 - **Types**: Co-locate types with the feature (`types.ts`). Export from index if needed.
 - **HTTP**: Use `src/lib/axiosClient.ts`. Do not instantiate Axios ad hoc.
-- **Queries**: Centralize QueryClient config in `src/lib/queryClient.ts` and use feature hooks.
+- **Actions**: Keep side effects in sagas, state changes in reducers.
+- **Selectors**: Use typed hooks `useAppSelector` and `useAppDispatch`.
 - **Shared UI**: Put cross-feature components in `src/shared/components`.
 
 ## Adding a New Feature (Example: "comment")
 
 1. Create `src/features/comment/` with subfolders: `components`, `hooks`, `services`, `store`, `types.ts`.
 2. Implement `services/commentService.ts` using `axiosClient`.
-3. Create hooks (e.g., `useComments.ts`, `useCreateComment.ts`) using React Query.
+3. Create a slice in `store/` (state, reducers, actions) and a saga to handle async.
 4. Build UI in `components/` and compose shared primitives from `src/shared/components/ui`.
-5. Wire into a route in `src/app` (page or nested route) and render the feature components.
+5. Register the slice reducer and fork the saga in `src/store/index.ts` and `src/store/rootSaga.ts`.
+6. Wire into a route in `src/app` and render the feature components.
+
+## Environment
+
+- `NEXT_PUBLIC_API_URL`: Base URL for API requests (used by `axiosClient`).
 
 ## Scripts
 
